@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User
+from .models import User, ConfirmEmailToken
 
 
 @admin.register(User)
@@ -15,4 +15,12 @@ class UserAdmin(admin.ModelAdmin):
         }),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
-    list_display = ('id', 'email', 'username', 'first_name', 'last_name', 'is_staff')
+    list_display = ('id', 'email', 'username', 'first_name', 'last_name', 'is_active', 'is_staff')
+
+
+@admin.register(ConfirmEmailToken)
+class ConfirmTokenAdmin(admin.ModelAdmin):
+
+    model = ConfirmEmailToken
+
+    list_display = ('id', 'user', 'token', 'created_at')

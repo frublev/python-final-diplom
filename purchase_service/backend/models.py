@@ -1,3 +1,5 @@
+import secrets
+
 from django.contrib.auth.base_user import BaseUserManager
 from django.db import models
 from django.contrib.auth.models import AbstractUser
@@ -47,7 +49,7 @@ class User(AbstractUser):
     company = models.CharField(verbose_name='Компания', max_length=40, blank=True)
     position = models.CharField(verbose_name='Должность', max_length=40, blank=True)
     username = None
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     type = models.CharField(verbose_name='Тип пользователя', choices=USER_TYPE_CHOICES, max_length=5, default='buyer')
 
     def __str__(self):
@@ -57,3 +59,19 @@ class User(AbstractUser):
         verbose_name = 'Пользователь'
         verbose_name_plural = "Список пользователей"
         ordering = ('email',)
+
+
+class ConfirmEmailToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=64, db_index=True, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def generate_token():
+        return secrets.token_hex()
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = self.generate_token()
+        return super(ConfirmEmailToken, self).save(*args, **kwargs)
+
