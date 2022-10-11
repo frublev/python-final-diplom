@@ -16,7 +16,8 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
-from backend.views import AllUserView, CreateUser, UserAuth, confirm_email
+from backend.views import AllUserView, CreateUser, UserAuth, confirm_email, ContactView, AllContactView
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,4 +25,6 @@ urlpatterns = [
     path('create_user/', CreateUser.as_view()),
     path('login/', UserAuth.as_view()),
     path('confirm_email/', confirm_email),
+    path('contacts/', ContactView.as_view()),
+    path('all_contacts/', AllContactView.as_view()),
 ]

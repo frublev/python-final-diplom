@@ -1,14 +1,17 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 from django.http import JsonResponse, HttpResponse
 from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
 
 from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import User, ConfirmEmailToken
-from .serializers import UserSerializer
+from .messege_manager import send_email
+from .models import User, ConfirmEmailToken, Contact
+from .serializers import UserSerializer, ContactSerializer
 from purchase_service.settings import DEFAULT_FROM_EMAIL
 
 
@@ -32,18 +35,13 @@ class CreateUser(APIView):
                 user = user_serializer.save()
                 user.set_password(request.data['password'])
                 user.save()
+                email_subject = 'Registration'
                 email_confirm_token, _ = ConfirmEmailToken.objects.get_or_create(user_id=user.id)
-                email = [request.data['email']]
                 email_html = f'<p>To confirm e-mail click <a href="http://127.0.0.1:8000/confirm_email?token=' \
                              f'{email_confirm_token.token}">here</a>.</p>'
-                sending_mail = EmailMultiAlternatives(
-                    'Registration',
-                    email_html,
-                    DEFAULT_FROM_EMAIL,
-                    email
-                )
-                sending_mail.attach_alternative(email_html, "text/html")
-                sending_mail.send()
+                sender = DEFAULT_FROM_EMAIL
+                receivers = [request.data['email']]
+                send_email(email_subject, email_html, sender, receivers)
                 return JsonResponse({'Status': True, 'email_confirm_token': email_confirm_token.token})
             else:
                 return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
@@ -68,3 +66,64 @@ def confirm_email(request):
         username = token_in_db.user
         token_in_db.delete()
         return HttpResponse(f'E-mail of user {username} has confirmed')
+
+
+class AllContactView(ListAPIView):
+    queryset = Contact.objects.all()
+    serializer_class = ContactSerializer
+
+
+class ContactView(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'You are not authorized'}, status=403)
+        contact = Contact.objects.filter(user_id=request.user.id)
+        serializer = ContactSerializer(contact, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'You are not authorized'}, status=403)
+        if {'city', 'street', 'phone', 'house'}.issubset(request.data):
+            request.data.update({'user': request.user.id})
+            print(request.data)
+            serializer = ContactSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return JsonResponse({'Status': True})
+            else:
+                JsonResponse({'Status': False, 'Errors': serializer.errors})
+        return JsonResponse({'Status': False, 'Errors': 'Оne or more required fields are not filled'})
+
+    def delete(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        items_string = request.data.get('items')
+        if items_string:
+            items_list = items_string.split(',')
+            query = Q()
+            objects_deleted = False
+            for contact_id in items_list:
+                if contact_id.isdigit():
+                    query = query | Q(user_id=request.user.id, id=contact_id)
+                    objects_deleted = True
+            if objects_deleted:
+                deleted_count = Contact.objects.filter(query).delete()[0]
+                return JsonResponse({'Status': True, 'Objects deleted': deleted_count})
+        return JsonResponse({'Status': False, 'Errors': 'Something went wrong'})
+
+    def put(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        if 'id' in request.data:
+            if request.data['id'].isdigit():
+                contact = Contact.objects.filter(id=request.data['id'], user_id=request.user.id).first()
+                print(contact)
+                if contact:
+                    serializer = ContactSerializer(contact, data=request.data, partial=True)
+                    if serializer.is_valid():
+                        serializer.save()
+                        return JsonResponse({'Status': True})
+                    else:
+                        JsonResponse({'Status': False, 'Errors': serializer.errors})
+        return JsonResponse({'Status': False, 'Errors': 'Something went wrong'})
