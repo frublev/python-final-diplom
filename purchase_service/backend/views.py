@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .messege_manager import send_email
-from .models import User, ConfirmEmailToken, Contact
+from .models import User, ConfirmEmailToken, Contact, Shop
 from .serializers import UserSerializer, ContactSerializer
 from purchase_service.settings import DEFAULT_FROM_EMAIL
 
@@ -35,6 +35,9 @@ class CreateUser(APIView):
                 user = user_serializer.save()
                 user.set_password(request.data['password'])
                 user.save()
+                user_type = request.data.get('type')
+                if user_type == 'shop':
+                    shop, _ = Shop.objects.get_or_create(user=user, name=request.data['company'], state=False)
                 email_subject = 'Registration'
                 email_confirm_token, _ = ConfirmEmailToken.objects.get_or_create(user_id=user.id)
                 email_html = f'<p>To confirm e-mail click <a href="http://127.0.0.1:8000/confirm_email?token=' \
@@ -63,6 +66,9 @@ def confirm_email(request):
     if token_in_db:
         token_in_db.user.is_active = True
         token_in_db.user.save()
+        if token_in_db.user.type == 'shop':
+            token_in_db.user.shop.state = True
+            token_in_db.user.shop.save()
         username = token_in_db.user
         token_in_db.delete()
         return HttpResponse(f'E-mail of user {username} has confirmed')

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, ConfirmEmailToken, Contact
+from .models import User, ConfirmEmailToken, Contact, Shop
 
 
 @admin.register(User)
@@ -32,3 +32,11 @@ class ContactAdmin(admin.ModelAdmin):
     model = Contact
 
     list_display = ('id', 'user', 'city', 'street', 'house', 'structure', 'building', 'apartment', 'phone')
+
+
+@admin.register(Shop)
+class ShopAdmin(admin.ModelAdmin):
+
+    model = Shop
+
+    list_display = ('id', 'user', 'name', 'state')

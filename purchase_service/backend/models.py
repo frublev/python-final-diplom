@@ -86,6 +86,7 @@ class Contact(models.Model):
     building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
     apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
     phone = models.CharField(max_length=20, verbose_name='Телефон')
+    url = models.URLField(verbose_name='Ссылка', null=True, blank=True)
 
     class Meta:
         verbose_name = 'Контакты пользователя'
@@ -97,8 +98,8 @@ class Contact(models.Model):
 
 class Shop(models.Model):
     name = models.CharField(max_length=50, verbose_name='Название')
-    url = models.URLField(verbose_name='Ссылка', null=True, blank=True)
     user = models.OneToOneField(User, verbose_name='Пользователь',
+                                related_name='shop',
                                 blank=True, null=True,
                                 on_delete=models.CASCADE)
     state = models.BooleanField(verbose_name='статус получения заказов', default=True)
