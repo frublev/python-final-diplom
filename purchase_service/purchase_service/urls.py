@@ -17,17 +17,20 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path
 
-from backend.views import AllUserView, CreateUser, UserAuth, confirm_email, ContactView, AllContactView, PartnerUpdate
+from backend.views import AllUserView, CreateUser, UserAuth, confirm_email, ContactView, AllContactView, \
+    PartnerUpdate, BasketView, AccountDetails
 
 from purchase_service import settings
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('users/', AllUserView.as_view()),
+    path('account/', AccountDetails.as_view()),
     path('create_user/', CreateUser.as_view()),
     path('login/', UserAuth.as_view()),
     path('confirm_email/', confirm_email),
     path('contacts/', ContactView.as_view()),
     path('all_contacts/', AllContactView.as_view()),
     path('update_price/', PartnerUpdate.as_view()),
+    path('basket/', BasketView.as_view()),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

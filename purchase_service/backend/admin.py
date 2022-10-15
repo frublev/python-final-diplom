@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import User, ConfirmEmailToken, Contact, Shop, File, Category, Product, ProductInfo, ProductParameter
+from .models import User, ConfirmEmailToken, Contact, Shop, File, Category, Product, ProductInfo, ProductParameter, \
+    Order, OrderItem
 
 
 @admin.register(File)
@@ -79,3 +80,18 @@ class ProductParameterAdmin(admin.ModelAdmin):
 
     list_display = ('id', 'product_info', 'parameter', 'value')
 
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+
+    model = Order
+
+    list_display = ('id', 'user', 'dt', 'contact', 'state')
+
+
+@admin.register(OrderItem)
+class OrderItemAdmin(admin.ModelAdmin):
+
+    model = OrderItem
+
+    list_display = ('id', 'order', 'product_info', 'quantity')

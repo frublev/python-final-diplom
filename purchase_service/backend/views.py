@@ -2,12 +2,14 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
-from django.db.models import Q
+from django.db.models import Q, Sum, F
 from django.http import JsonResponse, HttpResponse
+from django.db import IntegrityError
 from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
 
 from requests import get
 from yaml import load as load_yaml, Loader
+from ujson import loads as load_json
 
 from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView
@@ -15,8 +17,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .messege_manager import send_email
-from .models import User, ConfirmEmailToken, Contact, Shop, Category, ProductInfo, Product, Parameter, ProductParameter
-from .serializers import UserSerializer, ContactSerializer
+from .models import User, ConfirmEmailToken, Contact, Shop, Category, ProductInfo, Product, Parameter, \
+    ProductParameter, Order, OrderItem
+from .serializers import UserSerializer, ContactSerializer, OrderSerializer, OrderItemSerializer, ProductInfoSerializer
 from purchase_service.settings import DEFAULT_FROM_EMAIL
 
 
@@ -79,6 +82,35 @@ def confirm_email(request):
         return HttpResponse(f'E-mail of user {username} has confirmed')
 
 
+class AccountDetails(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        if 'password' in request.data:
+            try:
+                validate_password(request.data['password'])
+            except Exception as password_error:
+                error_array = []
+                for item in password_error:
+                    error_array.append(item)
+                return JsonResponse({'Status': False, 'Errors': {'password': error_array}})
+            else:
+                request.user.set_password(request.data['password'])
+
+        user_serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if user_serializer.is_valid():
+            user_serializer.save()
+            return JsonResponse({'Status': True})
+        else:
+            return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
+
+
 class AllContactView(ListAPIView):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
@@ -109,9 +141,9 @@ class ContactView(APIView):
     def delete(self, request):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
-        items_string = request.data.get('items')
-        if items_string:
-            items_list = items_string.split(',')
+        items_ = request.data.get('items')
+        if items_:
+            items_list = items_.split(',')
             query = Q()
             objects_deleted = False
             for contact_id in items_list:
@@ -179,7 +211,82 @@ class PartnerUpdate(APIView):
                         ProductParameter.objects.create(product_info_id=product_info.id,
                                                         parameter_id=parameter_object.id,
                                                         value=value)
-
                 return JsonResponse({'Status': True})
+        return JsonResponse({'Status': False, 'Errors': 'Something went wrong'})
 
-        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+
+class BasketView(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        basket = Order.objects.filter(
+            user_id=request.user.id, state='basket').prefetch_related(
+            'ordered_items__product_info__product__category',
+            'ordered_items__product_info__product_parameters__parameter').annotate(
+            total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
+        serializer = OrderSerializer(basket, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+
+        items_ = request.data.get('items')
+        if items_:
+            basket, _ = Order.objects.get_or_create(user_id=request.user.id, state='basket')
+            objects_created = 0
+            for order_item in items_:
+                order_item.update({'order': basket.id})
+                serializer = OrderItemSerializer(data=order_item)
+                if serializer.is_valid():
+                    try:
+                        serializer.save()
+                    except IntegrityError as error:
+                        return JsonResponse({'Status': False, 'Errors': str(error)})
+                    else:
+                        objects_created += 1
+
+                else:
+
+                    JsonResponse({'Status': False, 'Errors': serializer.errors})
+
+            return JsonResponse({'Status': True, 'Objects created': objects_created})
+        return JsonResponse({'Status': False, 'Errors': 'Items missing'})
+
+    def delete(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+
+        items_ = request.data.get('items')
+        if items_:
+            items_list = items_.split(',')
+            basket, _ = Order.objects.get_or_create(user_id=request.user.id, state='basket')
+            query = Q()
+            objects_deleted = False
+            for order_item_id in items_list:
+                if order_item_id.isdigit():
+                    query = query | Q(order_id=basket.id, id=order_item_id)
+                    objects_deleted = True
+
+            if objects_deleted:
+                deleted_count = OrderItem.objects.filter(query).delete()[0]
+                return JsonResponse({'Status': True, 'Objects deleted': deleted_count})
+        return JsonResponse({'Status': False, 'Errors': 'Items missing'})
+
+    def put(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+
+        items_ = request.data.get('items')
+        if items_:
+            basket, _ = Order.objects.get_or_create(user_id=request.user.id, state='basket')
+            objects_updated = 0
+            for order_item in items_:
+                print(basket.id)
+                if type(order_item['id']) == int and type(order_item['quantity']) == int:
+                    print(order_item['id'])
+                    objects_updated += OrderItem.objects.filter(order_id=basket.id,
+                                                                id=order_item['id']).update(
+                        quantity=order_item['quantity'])
+            return JsonResponse({'Status': True, 'Objects updated': objects_updated})
+        return JsonResponse({'Status': False, 'Errors': 'Items missing'})
