@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path
 
 from backend.views import AllUserView, CreateUser, UserAuth, confirm_email, ContactView, AllContactView, \
-    PartnerUpdate, BasketView, AccountDetails
+    PartnerUpdate, BasketView, AccountDetails, CatalogView, CategoryView, ShopView, ProductSearch
 
 from purchase_service import settings
 
@@ -32,5 +32,9 @@ urlpatterns = [
     path('contacts/', ContactView.as_view()),
     path('all_contacts/', AllContactView.as_view()),
     path('update_price/', PartnerUpdate.as_view()),
+    path('categories/', CategoryView.as_view()),
+    path('shops/', ShopView.as_view()),
+    path('catalog/', CatalogView.as_view()),
+    path('products/', ProductSearch.as_view()),
     path('basket/', BasketView.as_view()),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

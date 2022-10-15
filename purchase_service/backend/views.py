@@ -19,7 +19,8 @@ from rest_framework.views import APIView
 from .messege_manager import send_email
 from .models import User, ConfirmEmailToken, Contact, Shop, Category, ProductInfo, Product, Parameter, \
     ProductParameter, Order, OrderItem
-from .serializers import UserSerializer, ContactSerializer, OrderSerializer, OrderItemSerializer, ProductInfoSerializer
+from .serializers import UserSerializer, ContactSerializer, OrderSerializer, OrderItemSerializer, ProductInfoSerializer, \
+    CategorySerializer, ShopSerializer
 from purchase_service.settings import DEFAULT_FROM_EMAIL
 
 
@@ -213,6 +214,39 @@ class PartnerUpdate(APIView):
                                                         value=value)
                 return JsonResponse({'Status': True})
         return JsonResponse({'Status': False, 'Errors': 'Something went wrong'})
+
+
+class CategoryView(ListAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+
+class ShopView(ListAPIView):
+    queryset = Shop.objects.filter(state=True)
+    serializer_class = ShopSerializer
+
+
+class ProductSearch(ListAPIView):
+    queryset = ProductInfo.objects.all()
+    serializer_class = ProductInfoSerializer
+    search_fields = ['product__name']
+
+
+class CatalogView(APIView):
+    def get(self, request):
+        query = Q(shop__state=True)
+        shop_id = request.query_params.get('shop_id')
+        category_id = request.query_params.get('category_id')
+        if shop_id:
+            query = query & Q(shop_id=shop_id)
+        if category_id:
+            query = query & Q(product__category_id=category_id)
+        queryset = ProductInfo.objects.filter(
+            query).select_related(
+            'shop', 'product__category').prefetch_related(
+            'product_parameters__parameter').distinct()
+        serializer = ProductInfoSerializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 class BasketView(APIView):

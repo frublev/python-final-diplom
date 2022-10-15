@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Contact, Order, OrderItem, Shop, Product, ProductParameter, ProductInfo
+from .models import User, Contact, Order, OrderItem, Shop, Product, ProductParameter, ProductInfo, Category
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -16,6 +16,13 @@ class ContactSerializer(serializers.ModelSerializer):
         model = Contact
         fields = ('id', 'user', 'city', 'street', 'house', 'structure', 'building', 'apartment', 'phone', 'url')
         read_only_fields = ('id', )
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ('id', 'name',)
+        read_only_fields = ('id',)
 
 
 class ShopSerializer(serializers.ModelSerializer):
