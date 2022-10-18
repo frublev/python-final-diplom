@@ -1,0 +1,26 @@
+shop: Mail
+categories:
+  - id: 15
+    name: Аксессуары
+  - id: 1
+    name: Flash-накопители
+
+goods:
+  - id: 1000000
+    category: 15
+    model: cover/iphone/xs-max
+    name: Чехол для Apple iPhone XS Max
+    price: 1100
+    price_rrc: 1169
+    quantity: 140
+    parameters:
+      "Цвет": золотистый
+  - id: 1000001
+    category: 1
+    model: toshiba/32
+    name: Flash-накопитель Toshiba 32Gb
+    price: 6500
+    price_rrc: 6999
+    quantity: 90
+    parameters:
+      "Память": 32 Gb

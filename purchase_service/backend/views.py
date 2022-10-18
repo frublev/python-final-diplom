@@ -1,3 +1,5 @@
+from distutils.util import strtobool
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -5,11 +7,10 @@ from django.core.validators import URLValidator
 from django.db.models import Q, Sum, F
 from django.http import JsonResponse, HttpResponse
 from django.db import IntegrityError
-from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
 
 from requests import get
+from rest_framework.filters import SearchFilter
 from yaml import load as load_yaml, Loader
-from ujson import loads as load_json
 
 from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView
@@ -22,6 +23,8 @@ from .models import User, ConfirmEmailToken, Contact, Shop, Category, ProductInf
 from .serializers import UserSerializer, ContactSerializer, OrderSerializer, OrderItemSerializer, ProductInfoSerializer, \
     CategorySerializer, ShopSerializer
 from purchase_service.settings import DEFAULT_FROM_EMAIL
+
+from .signals import new_order
 
 
 class AllUserView(ListAPIView):
@@ -51,9 +54,8 @@ class CreateUser(APIView):
                 email_confirm_token, _ = ConfirmEmailToken.objects.get_or_create(user_id=user.id)
                 email_html = f'<p>To confirm e-mail click <a href="http://127.0.0.1:8000/confirm_email?token=' \
                              f'{email_confirm_token.token}">here</a>.</p>'
-                sender = DEFAULT_FROM_EMAIL
                 receivers = [request.data['email']]
-                send_email(email_subject, email_html, sender, receivers)
+                send_email(email_subject, email_html, receivers)
                 return JsonResponse({'Status': True, 'email_confirm_token': email_confirm_token.token})
             else:
                 return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
@@ -173,7 +175,33 @@ class ContactView(APIView):
         return JsonResponse({'Status': False, 'Errors': 'Something went wrong'})
 
 
-class PartnerUpdate(APIView):
+class ShopState(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        if request.user.type != 'shop':
+            return JsonResponse({'Status': False, 'Error': 'For shops only'}, status=403)
+
+        shop = request.user.shop
+        serializer = ShopSerializer(shop)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        if request.user.type != 'shop':
+            return JsonResponse({'Status': False, 'Error': 'For shops only'}, status=403)
+        state = request.data.get('state')
+        if state:
+            try:
+                Shop.objects.filter(user_id=request.user.id).update(state=strtobool(state))
+                return JsonResponse({'Status': True})
+            except ValueError as error:
+                return JsonResponse({'Status': False, 'Errors': str(error)})
+        return JsonResponse({'Status': False, 'Errors': 'Something went wrong'})
+
+
+class ShopUpdate(APIView):
     def post(self, request):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
@@ -229,6 +257,7 @@ class ShopView(ListAPIView):
 class ProductSearch(ListAPIView):
     queryset = ProductInfo.objects.all()
     serializer_class = ProductInfoSerializer
+    filter_backends = [SearchFilter]
     search_fields = ['product__name']
 
 
@@ -310,7 +339,6 @@ class BasketView(APIView):
     def put(self, request):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
-
         items_ = request.data.get('items')
         if items_:
             basket, _ = Order.objects.get_or_create(user_id=request.user.id, state='basket')
@@ -324,3 +352,47 @@ class BasketView(APIView):
                         quantity=order_item['quantity'])
             return JsonResponse({'Status': True, 'Objects updated': objects_updated})
         return JsonResponse({'Status': False, 'Errors': 'Items missing'})
+
+
+class OrderUserView(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        order = Order.objects.filter(
+            user_id=request.user.id).exclude(state='basket').prefetch_related(
+            'ordered_items__product_info__product__category',
+            'ordered_items__product_info__product_parameters__parameter').select_related('contact').annotate(
+            total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
+        serializer = OrderSerializer(order, many=True)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        state = request.data.get('state')
+        contact = request.data.get('contact')
+        if state == 'new' and contact:
+            order = Order.objects.filter(user_id=request.user.id, state='basket')
+            order_id = order.first()
+            order_updated = order.update(state='new', contact=contact)
+            if not order_updated:
+                return JsonResponse({'Status': False, 'Errors': 'Basket is empty'})
+            else:
+                new_order.send(sender=self.__class__, signal_data={'user_id': request.user.id, 'order_id': order_id})
+                return JsonResponse({'Status': True, 'Objects updated': order_updated})
+        return JsonResponse({'Status': False, 'Errors': 'Incorrect request'})
+
+
+class OrderShopView(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        if request.user.type != 'shop':
+            return JsonResponse({'Status': False, 'Error': 'Только для магазинов'}, status=403)
+        order = Order.objects.filter(
+            ordered_items__product_info__shop__user_id=request.user.id).exclude(state='basket').prefetch_related(
+            'ordered_items__product_info__product__category',
+            'ordered_items__product_info__product_parameters__parameter').select_related('contact').annotate(
+            total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
+        serializer = OrderSerializer(order, many=True)
+        return Response(serializer.data)
