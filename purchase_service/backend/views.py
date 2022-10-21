@@ -1,4 +1,5 @@
 from distutils.util import strtobool
+import datetime
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
@@ -13,18 +14,19 @@ from rest_framework.filters import SearchFilter
 from yaml import load as load_yaml, Loader
 
 from rest_framework.authtoken.models import Token
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .delivery_price import delivery_price
 from .messege_manager import send_email
 from .models import User, ConfirmEmailToken, Contact, Shop, Category, ProductInfo, Product, Parameter, \
     ProductParameter, Order, OrderItem
 from .serializers import UserSerializer, ContactSerializer, OrderSerializer, OrderItemSerializer, ProductInfoSerializer, \
-    CategorySerializer, ShopSerializer
+    CategorySerializer, ShopSerializer, ProductSerializer
 from purchase_service.settings import DEFAULT_FROM_EMAIL
 
-from .signals import new_order
+from .signals import new_order, confirm_order
 
 
 class AllUserView(ListAPIView):
@@ -210,6 +212,7 @@ class ShopUpdate(APIView):
             return JsonResponse({'Status': False, 'Error': 'For shops only'}, status=403)
 
         url = request.data.get('url')
+        now = datetime.datetime.now()
         if url:
             validate_url = URLValidator()
             try:
@@ -224,22 +227,52 @@ class ShopUpdate(APIView):
                     shop_id = request.user.shop.id
                     category_object.shops.add(shop_id)
                     category_object.save()
-                ProductInfo.objects.filter(shop_id=shop_id).delete()
+                # ProductInfo.objects.filter(shop_id=shop_id).delete()
                 for item in data['goods']:
                     product, _ = Product.objects.get_or_create(name=item['name'], category_id=item['category'])
-
-                    product_info = ProductInfo.objects.create(product_id=product.id,
-                                                              external_id=item['id'],
-                                                              model=item['model'],
-                                                              price=item['price'],
-                                                              price_rrc=item['price_rrc'],
-                                                              quantity=item['quantity'],
-                                                              shop_id=shop_id)
+                    product_info = ProductInfo.objects.filter(
+                        product_id=product.id,
+                        external_id=item['id'],
+                        shop_id=shop_id,
+                        state='new')
+                    if product_info:
+                        duplicate = True
+                    else:
+                        duplicate = False
+                    product_info_new = ProductInfo.objects.create(product_id=product.id,
+                                                                  external_id=item['id'],
+                                                                  model=item['model'],
+                                                                  description=item['description'],
+                                                                  price=item['price'],
+                                                                  price_rrc=item['price_rrc'],
+                                                                  quantity=item['quantity'],
+                                                                  shop_id=shop_id,
+                                                                  update_time=now,
+                                                                  weight=item['weight'],
+                                                                  package=item['package'],
+                                                                  state='new')
                     for name, value in item['parameters'].items():
                         parameter_object, _ = Parameter.objects.get_or_create(name=name)
-                        ProductParameter.objects.create(product_info_id=product_info.id,
+                        ProductParameter.objects.create(product_info_id=product_info_new.id,
                                                         parameter_id=parameter_object.id,
                                                         value=value)
+                    if duplicate:
+                        print(product_info[0])
+                        product_info_old = ProductInfoSerializer(product_info[0]).data
+                        old_id = product_info_old.pop('id')
+                        product_info_old.pop('quantity')
+                        print(product_info_old)
+                        product_info_new = ProductInfoSerializer(product_info_new).data
+                        new_id = product_info_new.pop('id')
+                        quantity_new = product_info_new.pop('quantity')
+                        print(product_info_new)
+                        if product_info_new == product_info_old:
+                            print(quantity_new)
+                            deleted_count = ProductInfo.objects.filter(id=new_id).delete()[0]
+                            ProductInfo.objects.filter(id=old_id).update(quantity=quantity_new)
+                        else:
+                            ProductInfo.objects.filter(id=old_id).update(state='old')
+
                 return JsonResponse({'Status': True})
         return JsonResponse({'Status': False, 'Errors': 'Something went wrong'})
 
@@ -252,6 +285,18 @@ class CategoryView(ListAPIView):
 class ShopView(ListAPIView):
     queryset = Shop.objects.filter(state=True)
     serializer_class = ShopSerializer
+
+
+class AllProductsView(ListAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+
+
+class ProductView(APIView):
+    def get(self, request, **kwargs):
+        queryset = ProductInfo.objects.filter(product=kwargs['pk'], state='new')
+        serializer = ProductInfoSerializer(queryset, read_only=True, many=True)
+        return Response(serializer.data)
 
 
 class ProductSearch(ListAPIView):
@@ -288,7 +333,12 @@ class BasketView(APIView):
             'ordered_items__product_info__product_parameters__parameter').annotate(
             total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
         serializer = OrderSerializer(basket, many=True)
-        return Response(serializer.data)
+        order_response = serializer.data
+        delivery_sum = delivery_price(order_response[0]['ordered_items'])
+        print(delivery_sum)
+        total_sum = order_response[0]['total_sum'] + delivery_sum
+        order_response[0].update({'стоимость доставки': delivery_sum, 'итого': total_sum})
+        return Response(order_response)
 
     def post(self, request):
         if not request.user.is_authenticated:
@@ -310,7 +360,6 @@ class BasketView(APIView):
                         objects_created += 1
 
                 else:
-
                     JsonResponse({'Status': False, 'Errors': serializer.errors})
 
             return JsonResponse({'Status': True, 'Objects created': objects_created})
@@ -344,9 +393,7 @@ class BasketView(APIView):
             basket, _ = Order.objects.get_or_create(user_id=request.user.id, state='basket')
             objects_updated = 0
             for order_item in items_:
-                print(basket.id)
                 if type(order_item['id']) == int and type(order_item['quantity']) == int:
-                    print(order_item['id'])
                     objects_updated += OrderItem.objects.filter(order_id=basket.id,
                                                                 id=order_item['id']).update(
                         quantity=order_item['quantity'])
@@ -373,13 +420,20 @@ class OrderUserView(APIView):
         contact = request.data.get('contact')
         if state == 'new' and contact:
             order = Order.objects.filter(user_id=request.user.id, state='basket')
-            order_id = order.first()
+            order_id = order.first().id
             order_updated = order.update(state='new', contact=contact)
+            OrderItem.objects.filter(order=order_id).update(state='new')
             if not order_updated:
                 return JsonResponse({'Status': False, 'Errors': 'Basket is empty'})
             else:
                 new_order.send(sender=self.__class__, signal_data={'user_id': request.user.id, 'order_id': order_id})
-                return JsonResponse({'Status': True, 'Objects updated': order_updated})
+                order = Order.objects.filter(
+                    id=order_id).prefetch_related(
+                    'ordered_items__product_info__product__category',
+                    'ordered_items__product_info__product_parameters__parameter').select_related('contact').annotate(
+                    total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
+                serializer = OrderSerializer(order, many=True)
+                return Response(serializer.data)
         return JsonResponse({'Status': False, 'Errors': 'Incorrect request'})
 
 
@@ -396,3 +450,24 @@ class OrderShopView(APIView):
             total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
         serializer = OrderSerializer(order, many=True)
         return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        order_id = request.data.get('order_id')
+        items_ = request.data.get('items')
+        if items_:
+            items_list = items_.split(',')
+            objects_updated = 0
+            for order_item in items_list:
+                objects_updated += OrderItem.objects.filter(order_id=order_id,
+                                                            id=order_item,
+                                                            state='new').update(state='confirmed')
+            order_item = OrderItem.objects.filter(order_id=order_id, state='new')
+            if not order_item:
+                order = Order.objects.filter(id=order_id)
+                user_id = order[0].user.id
+                confirm_order.send(sender=self.__class__, signal_data={'user_id': user_id,
+                                                                       'order_id': order_id})
+            return JsonResponse({'Status': True, 'Objects updated': objects_updated})
+        return JsonResponse({'Status': False, 'Errors': 'Items missing'})

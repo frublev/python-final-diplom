@@ -18,6 +18,10 @@ USER_TYPE_CHOICES = (
     ('buyer', 'Покупатель'),
 )
 
+PRODUCT_INFO_CHOICES = (
+    ('new', 'Актуально'),
+    ('old', 'Архив'),
+)
 STATE_CHOICES = (
     ('basket', 'Статус корзины'),
     ('new', 'Новый'),
@@ -64,6 +68,7 @@ class User(AbstractUser):
     objects = UserManager()
 
     email = models.EmailField(unique=True)
+    patronymic = models.CharField(verbose_name='Отчество', max_length=40, blank=True)
     company = models.CharField(verbose_name='Компания', max_length=40, blank=True)
     position = models.CharField(verbose_name='Должность', max_length=40, blank=True)
     username = None
@@ -160,20 +165,25 @@ class Product(models.Model):
 
 class ProductInfo(models.Model):
     model = models.CharField(max_length=80, verbose_name='Модель', blank=True)
+    description = models.CharField(max_length=300, verbose_name='Описание', blank=True)
     external_id = models.PositiveIntegerField(verbose_name='Внешний ИД')
     product = models.ForeignKey(Product, verbose_name='Продукт', related_name='product_infos', blank=True,
                                 on_delete=models.CASCADE)
     shop = models.ForeignKey(Shop, verbose_name='Магазин', related_name='product_infos', blank=True,
                              on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField(verbose_name='Количество')
+    quantity = models.PositiveIntegerField(verbose_name='Количество', default=0)
     price = models.PositiveIntegerField(verbose_name='Цена')
-    price_rrc = models.PositiveIntegerField(verbose_name='Рекомендуемая розничная цена')
+    price_rrc = models.PositiveIntegerField(verbose_name='Рекомендуемая розничная цена', default=0)
+    update_time = models.DateTimeField(verbose_name='Дата актуализации', default='2022-10-19 23:06:01.053923')
+    state = models.CharField(verbose_name='Статус', choices=PRODUCT_INFO_CHOICES, max_length=15, default='new')
+    weight = models.PositiveIntegerField(verbose_name='Вес, кг', default=0)
+    package = models.PositiveIntegerField(verbose_name='Объем упаковки, л', default=0)
 
     class Meta:
         verbose_name = 'Информация о продукте'
         verbose_name_plural = "Информационный список о продуктах"
         constraints = [
-            models.UniqueConstraint(fields=['product', 'shop', 'external_id'], name='unique_product_info'),
+            models.UniqueConstraint(fields=['product', 'shop', 'external_id', 'update_time'], name='unique_product_info'),
         ]
 
 
@@ -231,6 +241,7 @@ class OrderItem(models.Model):
                                      blank=True,
                                      on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(verbose_name='Количество')
+    state = models.CharField(verbose_name='Статус', choices=STATE_CHOICES, max_length=15, default='basket')
 
     class Meta:
         verbose_name = 'Заказанная позиция'

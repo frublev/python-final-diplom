@@ -19,7 +19,7 @@ from django.urls import path
 
 from backend.views import AllUserView, CreateUser, UserAuth, confirm_email, ContactView, AllContactView, \
     ShopUpdate, BasketView, AccountDetails, CatalogView, CategoryView, ShopView, ProductSearch, OrderUserView, \
-    ShopState, OrderShopView
+    ShopState, OrderShopView, AllProductsView, ProductView
 
 from purchase_service import settings
 
@@ -37,7 +37,9 @@ urlpatterns = [
     path('shops/', ShopView.as_view()),
     path('shops_state/', ShopState.as_view()),
     path('catalog/', CatalogView.as_view()),
-    path('products/', ProductSearch.as_view()),
+    path('products/', AllProductsView.as_view()),
+    path('products/<int:pk>/', ProductView.as_view()),
+    path('product_search/', ProductSearch.as_view()),
     path('basket/', BasketView.as_view()),
     path('user_orders/', OrderUserView.as_view()),
     path('shop_orders/', OrderShopView.as_view()),

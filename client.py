@@ -1,8 +1,9 @@
 import requests
+import datetime
 
 URL = 'http://127.0.0.1:8000'
 
-TOKEN = 'Token ###'
+TOKEN = 'Token '
 
 
 def to_request(token=TOKEN, **kwargs):
@@ -47,11 +48,11 @@ create_user = {
 contacts = {
             'method': 'post',
             'view': 'contacts',
-            'id': '32',
-            'city': 'City_32',
-            'street': 'Street_32',
-            'house': '32',
-            'structure': '32',
+            'id': '15',
+            'city': 'City_15',
+            'street': 'Street_15',
+            'house': '15',
+            'structure': '15',
             # 'building': 'Shop-1',
             # 'apartment': 'Manager',
             'phone': '+7(495)123-45-32',
@@ -71,9 +72,11 @@ update_price = {
     }
 
 basket = {
-        'method': 'post',
+        'method': 'get',
         'view': 'basket',
-        'items': [{'product_info': 6, 'quantity': 1}, {'product_info': 7, 'quantity': 1}],
+        'items': [{'product_info': 113, 'quantity': 1},
+                  {'product_info': 127, 'quantity': 1},
+                  {'product_info': 133, 'quantity': 1}],
     }
 
 account = {
@@ -90,7 +93,7 @@ user_orders = {
         'method': 'patch',
         'view': 'user_orders',
         'state': 'new',
-        'contact': 7,
+        'contact': 1,
     }
 
 shops_state = {
@@ -100,8 +103,10 @@ shops_state = {
     }
 
 shop_orders = {
-        'method': 'get',
+        'method': 'post',
         'view': 'shop_orders',
+        'order_id': 2,
+        'items': '3',
         'state': 'True',
     }
 

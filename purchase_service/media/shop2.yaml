@@ -1,26 +1,78 @@
 shop: Mail
 categories:
+  - id: 300
+    name: Мебель
+  - id: 224
+    name: Смартфоны
   - id: 15
     name: Аксессуары
   - id: 1
     name: Flash-накопители
 
 goods:
+  - id: 4216292
+    category: 224
+    model: apple/iphone/xs-max
+    description: description 4216292
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 113333
+    price_rrc: 116990
+    quantity: 30
+    weight: 1
+    package: 1
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+  - id: 4216313
+    category: 224
+    model: apple/iphone/xr
+    description: description 4216313
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 75333
+    price_rrc: 69990
+    quantity: 9
+    weight: 1
+    package: 1
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
   - id: 1000000
     category: 15
     model: cover/iphone/xs-max
+    description: description 1000000
     name: Чехол для Apple iPhone XS Max
     price: 1100
     price_rrc: 1169
     quantity: 140
+    weight: 1
+    package: 1
     parameters:
       "Цвет": золотистый
   - id: 1000001
     category: 1
     model: toshiba/32
+    description: description 1000000
     name: Flash-накопитель Toshiba 32Gb
     price: 6500
     price_rrc: 6999
     quantity: 90
+    weight: 1
+    package: 1
     parameters:
       "Память": 32 Gb
+  - id: 3000000
+    category: 1
+    model: ikea/box
+    description: description 3000000 Шкаф-купе
+    name: Шкаф-купе ИКЕА
+    price: 26500
+    price_rrc: 26999
+    quantity: 10
+    weight: 40
+    package: 1000
+    parameters:
+      "Цвет": Белый

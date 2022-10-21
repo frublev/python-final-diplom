@@ -16,13 +16,13 @@ class UserAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {'fields': ('email', 'password', 'type')}),
-        ('Personal info', {'fields': ('first_name', 'last_name', 'company', 'position')}),
+        ('Personal info', {'fields': ('first_name', 'patronymic', 'last_name', 'company', 'position')}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
         }),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
-    list_display = ('id', 'email', 'username', 'first_name', 'last_name', 'type', 'is_active', 'is_staff')
+    list_display = ('id', 'email', 'first_name', 'patronymic', 'last_name', 'type', 'is_active', 'is_staff')
 
 
 @admin.register(ConfirmEmailToken)
@@ -70,7 +70,8 @@ class ProductInfoAdmin(admin.ModelAdmin):
 
     model = ProductInfo
 
-    list_display = ('id', 'model', 'external_id', 'product', 'shop', 'quantity', 'price', 'price_rrc')
+    list_display = ('id', 'model', 'external_id', 'product', 'shop', 'quantity', 'price', 'price_rrc', \
+                    'weight', 'package', 'state')
 
 
 @admin.register(ProductParameter)
@@ -94,4 +95,4 @@ class OrderItemAdmin(admin.ModelAdmin):
 
     model = OrderItem
 
-    list_display = ('id', 'order', 'product_info', 'quantity')
+    list_display = ('id', 'order', 'product_info', 'quantity', 'state')
