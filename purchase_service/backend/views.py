@@ -10,6 +10,7 @@ from django.http import JsonResponse, HttpResponse
 from django.db import IntegrityError
 
 from requests import get
+from rest_framework import viewsets
 from rest_framework.filters import SearchFilter
 from yaml import load as load_yaml, Loader
 
@@ -287,16 +288,9 @@ class ShopView(ListAPIView):
     serializer_class = ShopSerializer
 
 
-class AllProductsView(ListAPIView):
+class ProductView(viewsets.ReadOnlyModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-
-
-class ProductView(APIView):
-    def get(self, request, **kwargs):
-        queryset = ProductInfo.objects.filter(product=kwargs['pk'], state='new')
-        serializer = ProductInfoSerializer(queryset, read_only=True, many=True)
-        return Response(serializer.data)
 
 
 class ProductSearch(ListAPIView):
